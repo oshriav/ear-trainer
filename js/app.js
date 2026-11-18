@@ -7,6 +7,7 @@ import {
 } from './theory.js';
 import { KINDS, summary, itemLabel, makeExercise } from './exercises.js';
 import * as store from './store.js';
+import * as sing from './sing.js';
 
 const { settings } = store;
 const $ = (sel) => document.querySelector(sel);
@@ -129,13 +130,13 @@ function renderStats() {
     const rows = Object.entries(store.stats[k.id] ?? {})
       .map(([id, t]) => ({ id, ...t, acc: t.total ? t.correct / t.total : 0 }))
       .sort((a, b) => a.acc - b.acc);
-    return section(k.title, rows.length === 0
+    return section(k.title + (rows.some((r) => r.timed) ? ' <span class="grow"></span><small>avg time · score</small>' : ''), rows.length === 0
       ? `<div class="row secondary">No answers yet</div>`
       : rows.map((r) => `
         <div class="row stat">
           <div class="stat-head mono">
             <span class="grow">${itemLabel(k.id, r.id)}</span>
-            <span class="secondary">${r.correct}/${r.total}</span>
+            <span class="secondary">${r.timed ? `${(r.time / r.timed).toFixed(1)}s · ` : ''}${r.correct}/${r.total}</span>
             <b class="pct">${Math.round(r.acc * 100)}%</b>
           </div>
           <div class="bar"><div style="width:${r.acc * 100}%;background:${color(r.acc)}"></div></div>
@@ -154,6 +155,7 @@ let sheetKind = null;
 function openSettings(kind) {
   sheetKind = kind;
   stopAutoNext();
+  sing.stop();
   renderSettings();
   sheet.hidden = false;
   requestAnimationFrame(() => sheet.classList.add('open'));
@@ -191,6 +193,17 @@ function renderSettings() {
       body += section(groupHeader(g, `chords:${g}`),
         CHORDS.filter((ch) => ch.group === g).map((ch) => toggleRow('chords', ch.id, ch.name, ch.symbol)).join(''));
     }
+  } else if (kind === 'sing') {
+    body += section('Singing', sing.DIRECTIONS.map((d) => toggleRow('singDirections', d.id, d.label, '', 1)).join('')
+      + boolRow('singAnyOctave', 'Any octave counts'),
+      'Hold within ±30 cents for half a second. “Any octave” accepts the right note in your own range.');
+    for (const [title, group, items] of [
+      ['Simple intervals', 'simple', INTERVALS.filter((i) => !i.compound)],
+      ['Compound intervals', 'compound', INTERVALS.filter((i) => i.compound)],
+    ]) {
+      body += section(groupHeader(title, `singIntervals:${group}`),
+        items.map((i) => toggleRow('singIntervals', i.id, i.name, i.short)).join(''));
+    }
   } else {
     body += section('Playback', CHORD_MODES.map((m) => toggleRow('inversionModes', m.id, m.label, '', 1)).join('')
       + (melodic(settings.inversionModes) ? speed : ''));
@@ -217,7 +230,7 @@ function renderSettings() {
 function setAll(spec, on) {
   const [key, group] = spec.split(':');
   let ids;
-  if (key === 'intervals') ids = INTERVALS.filter((i) => i.compound === (group === 'compound')).map((i) => i.id);
+  if (key === 'intervals' || key === 'singIntervals') ids = INTERVALS.filter((i) => i.compound === (group === 'compound')).map((i) => i.id);
   else if (key === 'chords') ids = CHORDS.filter((ch) => ch.group === group).map((ch) => ch.id);
   else ids = INVERSION_CANDIDATES.filter((ch) => ch.group === group).map((ch) => ch.id);
   const arr = settings[key];
@@ -242,7 +255,15 @@ function stopAutoNext() {
 }
 
 function startQuiz(kind) {
-  quiz = { kind, exercise: makeExercise(kind, settings), question: null, chosen: null, correct: 0, total: 0, streak: 0 };
+  sing.stop();
+  if (kind === 'sing') {
+    quiz = { kind };
+    setNav(KINDS.find((k) => k.id === kind).title, backButton,
+      `<button class="link icon" data-action="settings" aria-label="Settings">⚙︎</button>`);
+    sing.start(view);
+    return;
+  }
+  quiz = { times: [], kind, exercise: makeExercise(kind, settings), question: null, chosen: null, correct: 0, total: 0, streak: 0 };
   renderQuiz();
   if (quiz.exercise.options.length >= 2) {
     const q = quiz;
@@ -264,6 +285,7 @@ function nextQuestion() {
   if (q.answerID === quiz.question?.answerID) q = quiz.exercise.makeQuestion();
   quiz.question = q;
   quiz.chosen = null;
+  quiz.askedAt = performance.now();
   audio.play(q.events, settings.instrument);
   renderQuiz();
 }
@@ -280,7 +302,9 @@ function answer(id) {
   quiz.total += 1;
   const ok = id === q.answerID;
   if (ok) { quiz.correct += 1; quiz.streak += 1; } else quiz.streak = 0;
-  store.record(quiz.kind, q.answerID, ok);
+  quiz.seconds = (performance.now() - quiz.askedAt) / 1000;
+  quiz.times.push(quiz.seconds);
+  store.record(quiz.kind, q.answerID, ok, quiz.seconds);
   navigator.vibrate?.(ok ? 15 : [30, 40, 30]);
   if (settings.autoNext === 'always' || (settings.autoNext === 'afterCorrect' && ok)) {
     const delay = ok ? settings.delayAfterCorrect : settings.delayAfterWrong;
@@ -304,17 +328,18 @@ function renderQuiz() {
   let feedback = '';
   if (q && chosen !== null) {
     feedback = (chosen === q.answerID
-      ? `<div class="fb ok">Correct!</div>`
-      : `<div class="fb bad">It was ${titleOf(q.answerID)}</div>`)
+      ? `<div class="fb ok">Correct! <span class="secondary mono">${quiz.seconds.toFixed(1)}s</span></div>`
+      : `<div class="fb bad">It was ${titleOf(q.answerID)} <span class="secondary mono">${quiz.seconds.toFixed(1)}s</span></div>`)
       + `<small class="secondary">Tap any answer to hear it</small>`;
   }
   const state = (o) => (!q || chosen === null ? '' : o.id === q.answerID ? 'correct' : o.id === chosen ? 'wrong' : '');
   const pct = quiz.total ? ` · ${Math.round((quiz.correct / quiz.total) * 100)}%` : '';
+  const avg = quiz.times.length ? ` · ⏱ ${(quiz.times.reduce((a, b) => a + b, 0) / quiz.times.length).toFixed(1)}s` : '';
 
   view.innerHTML = `
     <div class="quiz">
       <div class="score mono secondary">
-        <span class="grow">${quiz.correct}/${quiz.total}${pct}</span>
+        <span class="grow">${quiz.correct}/${quiz.total}${pct}${avg}</span>
         ${quiz.streak >= 2 ? `<span class="streak">🔥 ${quiz.streak}</span>` : ''}
       </div>
       <button class="replay" data-action="replay" aria-label="Replay">🔊</button>
@@ -333,6 +358,7 @@ function renderQuiz() {
 // ---------- routing & events ----------
 
 function route() {
+  sing.stop();
   stopAutoNext();
   audio.stop();
   const [, page, kind] = location.hash.split('/');
@@ -359,6 +385,7 @@ document.addEventListener('click', (ev) => {
     return refresh();
   }
   if (t.dataset.answer !== undefined) return answer(t.dataset.answer);
+  if (t.dataset.action?.startsWith('sing-')) return sing.handle(t.dataset.action);
   switch (t.dataset.action) {
     case 'home': location.hash = '#/'; break;
     case 'stats': location.hash = '#/stats'; break;
@@ -384,8 +411,8 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.dataset.member) {
-    const value = t.dataset.member === 'chords' || t.dataset.member === 'inversionChords'
-      || t.dataset.member.endsWith('Modes') ? t.dataset.value : Number(t.dataset.value);
+    const numeric = ['intervals', 'singIntervals', 'inversions'].includes(t.dataset.member);
+    const value = numeric ? Number(t.dataset.value) : t.dataset.value;
     store.toggleMember(t.dataset.member, value, t.checked, Number(t.dataset.keep));
     refresh();
   } else if (t.dataset.bool) {
@@ -422,7 +449,7 @@ async function exportBackup() {
 }
 
 window.addEventListener('hashchange', route);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAutoNext(); audio.suspend(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAutoNext(); audio.suspend(); if (quiz?.kind === 'sing') sing.onHidden(); } });
 route();
 
 if ('serviceWorker' in navigator) {

@@ -8,6 +8,7 @@ let ctx = null;
 let current = null;
 let ticket = 0;
 let keepAlive = null;
+let sessionType = 'playback';
 
 function context() {
   if (!ctx) {
@@ -19,7 +20,7 @@ function context() {
 
 // Safari 17+: play through the silent switch, like AVAudioSession .playback.
 function setPlaybackSession() {
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  try { if (navigator.audioSession) navigator.audioSession.type = sessionType; } catch {}
 }
 
 /** A looping silent <audio> element: while an HTML media element plays, iOS routes Web Audio
@@ -58,6 +59,16 @@ export function unlock() {
   if (el.paused) el.play().catch(() => {});
 }
 
+/** The single shared AudioContext (also used for the mic). */
+export const getContext = context;
+
+/** 'playback' normally; 'play-and-record' while the mic is open so output stays on the speaker. */
+export function setSessionType(type) {
+  sessionType = type;
+  setPlaybackSession();
+}
+
+/** Plays events; returns seconds until the sound has finished. */
 export function play(events, instrument) {
   const my = ++ticket;
   const c = context();
@@ -76,6 +87,7 @@ export function play(events, instrument) {
     src.start();
     current = src;
   }, 0);
+  return Math.max(0, ...events.map((e) => e.start + e.duration)) + 0.35;
 }
 
 export function stop() {

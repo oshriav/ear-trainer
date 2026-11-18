@@ -13,6 +13,7 @@ export const KINDS = [
   { id: 'intervals', title: 'Intervals', icon: '↕' },
   { id: 'chords', title: 'Chords', icon: '🎹' },
   { id: 'inversions', title: 'Chord inversions', icon: '⟲' },
+  { id: 'sing', title: 'Sing the interval', icon: '🎤' },
 ];
 
 export function summary(kind, s) {
@@ -26,12 +27,15 @@ export function summary(kind, s) {
     case 'inversions':
       return `${s.inversions.length} inversions · ${s.inversionChords.length} chords · `
         + modes(CHORD_MODES, s.inversionModes);
+    case 'sing':
+      return `${s.singIntervals.length} intervals · `
+        + s.singDirections.map((d) => (d === 'up' ? '↑' : '↓')).join('') + (s.singAnyOctave ? ' · any octave' : '');
   }
 }
 
 export function itemLabel(kind, id) {
   switch (kind) {
-    case 'intervals': return INTERVALS[Number(id)]?.name ?? id;
+    case 'intervals': case 'sing': return INTERVALS[Number(id)]?.name ?? id;
     case 'chords': return chordById(id)?.name ?? id;
     case 'inversions': return INVERSION_NAMES[Number(id)] ?? id;
   }

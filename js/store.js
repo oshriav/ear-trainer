@@ -13,6 +13,9 @@ export const DEFAULT_SETTINGS = {
   inversionChords: ['maj', 'min'],
   inversions: [0, 1, 2],
   inversionModes: ['block'],
+  singIntervals: [2, 3, 4, 5, 7, 12],
+  singDirections: ['up'],
+  singAnyOctave: true,
   melodicSpeed: 1.0,
   autoNext: 'always', // off | afterCorrect | always
   delayAfterCorrect: 1.0,
@@ -55,11 +58,16 @@ export function toggleMember(key, value, on, keepAtLeast = 0) {
 /** exercise id -> item id -> { correct, total } */
 export let stats = load(STATS_KEY, {});
 
-export function record(kind, item, correct) {
+/** seconds: time from the question starting to the answer (optional). */
+export function record(kind, item, correct, seconds) {
   const byKind = (stats[kind] ??= {});
   const t = (byKind[item] ??= { correct: 0, total: 0 });
   t.total += 1;
   if (correct) t.correct += 1;
+  if (Number.isFinite(seconds) && seconds > 0 && seconds < 600) {
+    t.time = (t.time ?? 0) + seconds;
+    t.timed = (t.timed ?? 0) + 1;
+  }
   save(STATS_KEY, stats);
 }
 
