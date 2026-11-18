@@ -7,6 +7,9 @@ import {
 } from './theory.js';
 import { KINDS, summary, itemLabel, makeExercise } from './exercises.js';
 import * as store from './store.js';
+import {
+  TONIC_CONTEXTS, KEY_MODES, KEY_CHANGES, LABEL_STYLES, RANGES, LENGTHS, STEP_ROWS,
+} from './functional.js';
 import * as sing from './sing.js';
 
 const { settings } = store;
@@ -90,7 +93,7 @@ function renderHome() {
       <button class="row link" data-action="test-sound">▶︎ Test sound</button>`,
       'No sound? Turn the volume up. On iPhone, tap any button once first.')}
     ${installSection()}
-    ${section('Coming soon', ['Scales', 'Melodic dictation', 'Chord progressions']
+    ${section('Coming soon', ['Scales', 'Chord progressions']
       .map((t) => `<div class="row secondary">${t}</div>`).join(''))}`;
 }
 
@@ -135,7 +138,7 @@ function renderStats() {
       : rows.map((r) => `
         <div class="row stat">
           <div class="stat-head mono">
-            <span class="grow">${itemLabel(k.id, r.id)}</span>
+            <span class="grow">${itemLabel(k.id, r.id, settings)}</span>
             <span class="secondary">${r.timed ? `${(r.time / r.timed).toFixed(1)}s · ` : ''}${r.correct}/${r.total}</span>
             <b class="pct">${Math.round(r.acc * 100)}%</b>
           </div>
@@ -204,6 +207,8 @@ function renderSettings() {
       body += section(groupHeader(title, `singIntervals:${group}`),
         items.map((i) => toggleRow('singIntervals', i.id, i.name, i.short)).join(''));
     }
+  } else if (['degrees', 'dictation', 'functions'].includes(kind)) {
+    body += functionalSettings(kind, speed);
   } else {
     body += section('Playback', CHORD_MODES.map((m) => toggleRow('inversionModes', m.id, m.label, '', 1)).join('')
       + (melodic(settings.inversionModes) ? speed : ''));
@@ -225,6 +230,26 @@ function renderSettings() {
 
   sheetBody.innerHTML = body;
   sheetBody.scrollTop = scroll;
+}
+
+function functionalSettings(kind, speed) {
+  const seg = (key, items) => `<div class="row">${segmented(key, items, settings[key])}</div>`;
+  let body = section('Key', seg('fnContext', TONIC_CONTEXTS)
+    + KEY_MODES.map((m) => toggleRow('fnKeyModes', m.id, m.label, '', 1)).join('')
+    + `<div class="row"><span class="grow">Key changes</span></div>` + seg('fnKeyChange', KEY_CHANGES),
+    'How the key is set before each question, and whether it changes.');
+  body += section('Answers', seg('fnLabels', LABEL_STYLES)
+    + (kind !== 'functions' ? `<div class="row"><span class="grow">Range</span></div>` + seg('fnRange', RANGES) : '')
+    + (kind === 'dictation' ? `<div class="row"><span class="grow">Notes</span></div>` + seg('fnLength', LENGTHS) + speed : '')
+    + (kind !== 'dictation' ? boolRow('fnResolve', kind === 'functions' ? 'Resolve to I after answer' : 'Walk to do after answer') : ''));
+  if (kind === 'functions') {
+    body += section('Chords (scale degree)', STEP_ROWS.map((r) => toggleRow('fnChordDegrees', r.id, r.title, '')).join('')
+      + boolRow('fnBorrowed', 'Borrowed chords'), 'Borrowed adds the same degrees from the parallel major/minor key (♭VI, ♭VII, iv…).');
+  } else {
+    body += section('Degrees', STEP_ROWS.map((r) => toggleRow('fnDegrees', r.id, r.title, r.detail)).join('')
+      + boolRow('fnChromatic', 'Chromatic notes'), 'Chromatic adds all notes outside the key (ra, fi, le…).');
+  }
+  return body;
 }
 
 function setAll(spec, on) {
@@ -285,6 +310,7 @@ function nextQuestion() {
   if (q.answerID === quiz.question?.answerID) q = quiz.exercise.makeQuestion();
   quiz.question = q;
   quiz.chosen = null;
+  quiz.entered = [];
   quiz.askedAt = performance.now();
   audio.play(q.events, settings.instrument);
   renderQuiz();
@@ -298,13 +324,24 @@ function answer(id) {
     audio.play(q.render(id), settings.instrument);
     return;
   }
+  if (q.parts) {
+    // Dictation: collect one tap per note, grade when all are in.
+    quiz.entered.push(id);
+    if (quiz.entered.length < q.parts.length) return renderQuiz();
+    id = quiz.entered.join(' ');
+  }
   quiz.chosen = id;
   quiz.total += 1;
   const ok = id === q.answerID;
   if (ok) { quiz.correct += 1; quiz.streak += 1; } else quiz.streak = 0;
   quiz.seconds = (performance.now() - quiz.askedAt) / 1000;
   quiz.times.push(quiz.seconds);
-  store.record(quiz.kind, q.answerID, ok, quiz.seconds);
+  if (q.parts) {
+    q.parts.forEach((p, i) => store.record(quiz.kind, p, quiz.entered[i] === p, quiz.seconds / q.parts.length));
+  } else {
+    store.record(quiz.kind, q.answerID, ok, quiz.seconds);
+  }
+  if (q.after) audio.play(q.after, settings.instrument);
   navigator.vibrate?.(ok ? 15 : [30, 40, 30]);
   if (settings.autoNext === 'always' || (settings.autoNext === 'afterCorrect' && ok)) {
     const delay = ok ? settings.delayAfterCorrect : settings.delayAfterWrong;
@@ -324,7 +361,9 @@ function renderQuiz() {
     return;
   }
 
-  const titleOf = (id) => ex.options.find((o) => o.id === id)?.title ?? id;
+  const titleOf = (id) => (q?.parts && id === q.answerID
+    ? q.parts.map((p) => ex.options.find((o) => o.id === p)?.title ?? p).join(' ')
+    : ex.options.find((o) => o.id === id)?.title ?? id);
   let feedback = '';
   if (q && chosen !== null) {
     feedback = (chosen === q.answerID
@@ -332,7 +371,7 @@ function renderQuiz() {
       : `<div class="fb bad">It was ${titleOf(q.answerID)} <span class="secondary mono">${quiz.seconds.toFixed(1)}s</span></div>`)
       + `<small class="secondary">Tap any answer to hear it</small>`;
   }
-  const state = (o) => (!q || chosen === null ? '' : o.id === q.answerID ? 'correct' : o.id === chosen ? 'wrong' : '');
+  const state = (o) => (!q || chosen === null || q.parts ? '' : o.id === q.answerID ? 'correct' : o.id === chosen ? 'wrong' : '');
   const pct = quiz.total ? ` · ${Math.round((quiz.correct / quiz.total) * 100)}%` : '';
   const avg = quiz.times.length ? ` · ⏱ ${(quiz.times.reduce((a, b) => a + b, 0) / quiz.times.length).toFixed(1)}s` : '';
 
@@ -344,6 +383,7 @@ function renderQuiz() {
       </div>
       <button class="replay" data-action="replay" aria-label="Replay">🔊</button>
       <div class="prompt"><b>${ex.prompt}</b><br><span class="secondary">${q?.caption ?? '&nbsp;'}</span></div>
+      ${q?.parts ? slots(q, ex) : ''}
       <div class="feedback">${feedback}</div>
       <div class="answers">
         ${ex.options.map((o) => `
@@ -353,6 +393,17 @@ function renderQuiz() {
       </div>
       <button class="primary next" data-action="next" ${chosen === null ? 'disabled' : ''}>Next</button>
     </div>`;
+}
+
+function slots(q, ex) {
+  const done = quiz.chosen !== null;
+  const cells = q.parts.map((p, i) => {
+    const e = quiz.entered[i];
+    const cls = !done ? (e !== undefined ? 'filled' : '') : e === p ? 'correct' : 'wrong';
+    return `<span class="slot ${cls}">${e !== undefined ? ex.options.find((o) => o.id === e)?.title ?? e : '?'}</span>`;
+  }).join('');
+  const undo = !done && quiz.entered.length ? `<button class="link small" data-action="undo" aria-label="Undo">⌫</button>` : '';
+  return `<div class="slots">${cells}${undo}</div>`;
 }
 
 // ---------- routing & events ----------
@@ -394,6 +445,7 @@ document.addEventListener('click', (ev) => {
     case 'close-settings': closeSettings(); break;
     case 'replay': if (quiz?.question) audio.play(quiz.question.events, settings.instrument); break;
     case 'next': nextQuestion(); break;
+    case 'undo': if (quiz?.entered?.length && quiz.chosen === null) { quiz.entered.pop(); renderQuiz(); } break;
     case 'test-sound':
       audio.play(chordNotes(CHORDS[0], 60, 0).map((midi) => ({ midi, start: 0, duration: 1.5 })), settings.instrument);
       break;
@@ -411,7 +463,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.dataset.member) {
-    const numeric = ['intervals', 'singIntervals', 'inversions'].includes(t.dataset.member);
+    const numeric = ['intervals', 'singIntervals', 'inversions', 'fnDegrees', 'fnChordDegrees'].includes(t.dataset.member);
     const value = numeric ? Number(t.dataset.value) : t.dataset.value;
     store.toggleMember(t.dataset.member, value, t.checked, Number(t.dataset.keep));
     refresh();

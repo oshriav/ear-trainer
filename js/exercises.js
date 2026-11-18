@@ -4,6 +4,7 @@ import {
   INTERVALS, INTERVAL_MODES, CHORDS, CHORD_MODES, INVERSION_CANDIDATES, INVERSION_NAMES,
   INVERSION_BASS, chordById, chordNotes, maxInversion,
 } from './theory.js';
+import { makeFunctional, functionalSummary, functionalItemLabel } from './functional.js';
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -14,6 +15,9 @@ export const KINDS = [
   { id: 'chords', title: 'Chords', icon: '🎹' },
   { id: 'inversions', title: 'Chord inversions', icon: '⟲' },
   { id: 'sing', title: 'Sing the interval', icon: '🎤' },
+  { id: 'degrees', title: 'Scale degrees', icon: '🎯' },
+  { id: 'dictation', title: 'Melodic dictation', icon: '🎼' },
+  { id: 'functions', title: 'Chord function', icon: '🏠' },
 ];
 
 export function summary(kind, s) {
@@ -30,14 +34,16 @@ export function summary(kind, s) {
     case 'sing':
       return `${s.singIntervals.length} intervals · `
         + s.singDirections.map((d) => (d === 'up' ? '↑' : '↓')).join('') + (s.singAnyOctave ? ' · any octave' : '');
+    default: return functionalSummary(kind, s);
   }
 }
 
-export function itemLabel(kind, id) {
+export function itemLabel(kind, id, s) {
   switch (kind) {
     case 'intervals': case 'sing': return INTERVALS[Number(id)]?.name ?? id;
     case 'chords': return chordById(id)?.name ?? id;
     case 'inversions': return INVERSION_NAMES[Number(id)] ?? id;
+    default: return functionalItemLabel(kind, id, s);
   }
 }
 
@@ -52,6 +58,7 @@ function chordEvents(notes, mode, speed) {
  *  A question is { answerID, caption, events, render(optionId) -> events }. */
 export function makeExercise(kind, s) {
   const speed = s.melodicSpeed;
+  if (['degrees', 'dictation', 'functions'].includes(kind)) return makeFunctional(kind, s);
   switch (kind) {
     case 'intervals': {
       const intervals = INTERVALS.filter((i) => s.intervals.includes(i.id));

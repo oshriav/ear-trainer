@@ -16,6 +16,17 @@ export const DEFAULT_SETTINGS = {
   singIntervals: [2, 3, 4, 5, 7, 12],
   singDirections: ['up'],
   singAnyOctave: true,
+  fnContext: 'cadence', // drone | tonic | VI | cadence
+  fnKeyModes: ['major'],
+  fnKeyChange: 'question', // question | session
+  fnLabels: 'solfege', // solfege | numbers | both
+  fnRange: '1',
+  fnLength: '3',
+  fnDegrees: [1, 2, 3, 4, 5, 6, 7],
+  fnChromatic: false,
+  fnResolve: true,
+  fnChordDegrees: [1, 2, 4, 5, 6],
+  fnBorrowed: false,
   melodicSpeed: 1.0,
   autoNext: 'always', // off | afterCorrect | always
   delayAfterCorrect: 1.0,
