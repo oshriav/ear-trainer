@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Ear Trainer</title>
+  <meta name="description" content="Free ear training: intervals, chords and inversions. Works offline.">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Ear Trainer">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav">
+    <div id="nav-left" class="nav-side"></div>
+    <h1 id="nav-title">Ear Trainer</h1>
+    <div id="nav-right" class="nav-side right"></div>
+  </header>
+  <main id="view"></main>
+
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-panel">
+      <header class="nav sheet-nav">
+        <div class="nav-side"></div>
+        <h1 id="sheet-title">Settings</h1>
+        <div class="nav-side right"><button class="link bold" data-action="close-settings">Done</button></div>
+      </header>
+      <div id="sheet-body" class="sheet-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
