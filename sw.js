@@ -1,6 +1,6 @@
 // Offline support: precache the whole app, serve from cache, refresh in the background.
 // Bump VERSION when shipping changes so old caches are dropped.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `eartrainer-${VERSION}`;
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',

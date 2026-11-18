@@ -5,7 +5,7 @@ import {
   INSTRUMENTS, INTERVALS, INTERVAL_MODES, CHORDS, CHORD_GROUPS, CHORD_MODES, INVERSION_CANDIDATES,
   INVERSION_NAMES, INVERSION_BASS, chordNotes,
 } from './theory.js';
-import { KINDS, summary, itemLabel, makeExercise } from './exercises.js';
+import { KINDS, KIND_GROUPS, summary, itemLabel, makeExercise } from './exercises.js';
 import * as store from './store.js';
 import {
   TONIC_CONTEXTS, KEY_MODES, KEY_CHANGES, LABEL_STYLES, RANGES, LENGTHS, STEP_ROWS,
@@ -82,12 +82,12 @@ const backButton = `<button class="link" data-action="home">‹ Back</button>`;
 function renderHome() {
   setNav('Ear Trainer', '', `<button class="link icon" data-action="stats" aria-label="Stats">📊</button>`);
   view.innerHTML = `
-    ${section('Practice', KINDS.map((k) => `
+    ${KIND_GROUPS.map((g) => section(g, KINDS.filter((k) => k.group === g).map((k) => `
       <button class="row nav-row" data-action="quiz" data-kind="${k.id}">
         <span class="icon-badge">${k.icon}</span>
-        <span class="grow"><b>${k.title}</b><br><small class="secondary">${summary(k.id, settings)}</small></span>
+        <span class="grow"><b>${k.short}</b><br><small class="secondary">${summary(k.id, settings)}</small></span>
         <span class="chevron">›</span>
-      </button>`).join(''))}
+      </button>`).join(''))).join('')}
     ${section('Sound', `
       <div class="row">${segmented('instrument', INSTRUMENTS, settings.instrument)}</div>
       <button class="row link" data-action="test-sound">▶︎ Test sound</button>`,

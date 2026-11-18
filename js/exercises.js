@@ -10,14 +10,17 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const randInt = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const label = (list, id) => list.find((m) => m.id === id)?.label ?? id;
 
+export const KIND_GROUPS = ['Intervals', 'Chords', 'Functional'];
+
+/** title: full name (nav, stats); short: row label on home, under its group. */
 export const KINDS = [
-  { id: 'intervals', title: 'Intervals', icon: '↕' },
-  { id: 'chords', title: 'Chords', icon: '🎹' },
-  { id: 'inversions', title: 'Chord inversions', icon: '⟲' },
-  { id: 'sing', title: 'Sing the interval', icon: '🎤' },
-  { id: 'degrees', title: 'Scale degrees', icon: '🎯' },
-  { id: 'dictation', title: 'Melodic dictation', icon: '🎼' },
-  { id: 'functions', title: 'Chord function', icon: '🏠' },
+  { id: 'intervals', group: 'Intervals', short: 'Recognize', title: 'Recognize intervals', icon: '↕' },
+  { id: 'sing', group: 'Intervals', short: 'Sing', title: 'Sing intervals', icon: '🎤' },
+  { id: 'chords', group: 'Chords', short: 'Quality', title: 'Chord quality', icon: '🎹' },
+  { id: 'inversions', group: 'Chords', short: 'Inversions', title: 'Chord inversions', icon: '⟲' },
+  { id: 'degrees', group: 'Functional', short: 'Scale degrees', title: 'Scale degrees', icon: '🎯' },
+  { id: 'dictation', group: 'Functional', short: 'Melodic dictation', title: 'Melodic dictation', icon: '🎼' },
+  { id: 'functions', group: 'Functional', short: 'Chord function', title: 'Chord function', icon: '🏠' },
 ];
 
 export function summary(kind, s) {
