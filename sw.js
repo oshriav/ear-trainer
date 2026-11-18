@@ -1,6 +1,6 @@
 // Offline support: precache the whole app, serve from cache, refresh in the background.
 // Bump VERSION when shipping changes so old caches are dropped.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `eartrainer-${VERSION}`;
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
@@ -9,7 +9,7 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

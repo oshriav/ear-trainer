@@ -13,8 +13,8 @@ const $ = (sel) => document.querySelector(sel);
 const navTitle = $('#nav-title'), navLeft = $('#nav-left'), navRight = $('#nav-right');
 const view = $('#view'), sheet = $('#sheet'), sheetBody = $('#sheet-body');
 
-// iOS only allows audio after a tap; unlock on the first one.
-document.addEventListener('pointerdown', () => audio.unlock(), { once: true, capture: true });
+// iOS only starts audio inside a tap. touchend/click count as a user gesture; pointerdown does not.
+for (const type of ['touchend', 'click']) document.addEventListener(type, () => audio.unlock(), { capture: true });
 
 // ---------- shared bits ----------
 
@@ -87,9 +87,37 @@ function renderHome() {
     ${section('Sound', `
       <div class="row">${segmented('instrument', INSTRUMENTS, settings.instrument)}</div>
       <button class="row link" data-action="test-sound">▶︎ Test sound</button>`,
-      'Tip: in Safari tap Share → Add to Home Screen to install. Works offline after the first visit.')}
+      'No sound? Turn the volume up. On iPhone, tap any button once first.')}
+    ${installSection()}
     ${section('Coming soon', ['Scales', 'Melodic dictation', 'Chord progressions']
       .map((t) => `<div class="row secondary">${t}</div>`).join(''))}`;
+}
+
+// ---------- install as app ----------
+
+let installPrompt = null; // Chrome/Edge/Android: the browser's own install dialog
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  if (!quiz && !location.hash.startsWith('#/stats')) renderHome();
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; renderHome(); });
+
+const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function installSection() {
+  if (isInstalled()) return '';
+  if (installPrompt) {
+    return section('App', `<button class="row link" data-action="install">⊕ Install as app</button>`,
+      'Adds Ear Trainer to your home screen. Works offline.');
+  }
+  const how = isIOS()
+    ? 'Tap the Share button <b>⬆︎</b> (in Safari or Chrome), then <b>Add to Home Screen</b>.'
+    : 'Open the browser menu <b>⋮</b> and choose <b>Install app</b> or <b>Add to Home screen</b>.';
+  return section('App', `<div class="row"><span>${how}</span></div>`,
+    'Then open it from the home screen. Works offline after the first visit.');
 }
 
 // ---------- stats ----------
@@ -346,6 +374,10 @@ document.addEventListener('click', (ev) => {
       if (confirm('Reset all stats?')) { store.resetStats(); renderStats(); }
       break;
     case 'export': exportBackup(); break;
+    case 'install':
+      installPrompt?.prompt();
+      installPrompt?.userChoice.finally(() => { installPrompt = null; renderHome(); });
+      break;
   }
 });
 
@@ -390,7 +422,12 @@ async function exportBackup() {
 }
 
 window.addEventListener('hashchange', route);
-document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAutoNext(); audio.stop(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAutoNext(); audio.suspend(); } });
 route();
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator) {
+  // A new version took over: reload once so it's used right away, not on the next launch.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) location.reload(); });
+  navigator.serviceWorker.register('./sw.js').then((r) => r.update()).catch(() => {});
+}
